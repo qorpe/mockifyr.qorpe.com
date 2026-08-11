@@ -27,8 +27,10 @@ Three flags cover the hardening this page's guidance implies — see the
   gets **403** when it names another. `--admin-user` remains the system scope.
 - **`--mask-headers` / `--mask-body-fields`** — keep credentials and sensitive fields out of the
   request journal entirely.
+- **`--partner-credential <tenant>:<user>:<pass>`** — the same scoping, for a credential you hand to
+  someone outside your team. See [handing one out](#handing-a-credential-to-a-partner).
 - **`--block-outbound-routes`** — on an unauthenticated host, refuse the routes that make outbound
-  calls or change outbound trust.
+  calls or change outbound trust. On an authenticated host it does nothing, and says so at startup.
 
 An unauthenticated host also prints a startup line naming what is reachable.
 
@@ -92,6 +94,39 @@ Without credentials the admin API returns **401**; the mock surface is unaffecte
 **The dashboard** shows a login screen — enter the same username and password. It stores the
 credentials locally and attaches Basic auth to its admin calls. (Mockifyr deliberately omits the
 `WWW-Authenticate` header so the browser's native Basic-auth popup never blocks the dashboard.)
+
+## Handing a credential to a partner
+
+`--tenant-credential` answers "which tenant's data may this credential touch". It does not answer
+"may this credential make the host call out", and for a credential you keep yourself that question
+does not come up — you already trust the holder.
+
+It comes up the moment you hand one to somebody else. A few admin routes act on the network rather
+than on data: starting a recording points this host at a target of the caller's choosing, outbound
+trust changes which certificates it accepts, and Git sync reaches a remote. So does a stub: a
+`proxyBaseUrl` forwards to whatever it names, and a post-serve action calls out after responding.
+
+`--partner-credential` takes the same `tenant:user:pass` form and refuses all of it:
+
+```bash
+mockifyr --admin-user ops --admin-pass "$OPS_PASS" \
+         --partner-credential "acme:acme-team:$ACME_PASS"
+```
+
+The holder can do everything with `acme`'s data — stubs, sandbox resources, environments, the
+journal, captured messages — and gets **403** on `/__admin/recordings`, `/__admin/outbound-trust` and
+`/__admin/git`, and on any stub declaring `proxyBaseUrl` or a post-serve action. The refusal names
+the field, so if they genuinely need a proxy stub they can tell you what to add rather than guessing
+why it failed.
+
+Importing an OpenAPI document still works: nothing the importer generates reaches outward, so a
+partner can turn their specification into a working sandbox unaided.
+
+:::note
+Refused *changes* appear in the [audit trail](/admin-api/#audit-trail) as `partner:<tenant>`, distinct
+from an operator's `tenant:<tenant>` — so a tenant with both credentials still tells you which one
+acted. Refused reads are not recorded, the same as any other read.
+:::
 
 ## Best practices
 
