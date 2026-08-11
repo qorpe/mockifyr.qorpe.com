@@ -103,6 +103,75 @@ levels (a cyclic `$ref`) is refused instead of hanging.
 
 The dashboard's **Add stub → OpenAPI** channel does the same thing with a file picker.
 
+## Relations between collections
+
+Real APIs are hierarchical. An order belongs to a customer, an account to a client, a transaction to
+an account — and a sandbox that does not know this is worse than one that has no data at all,
+because it answers confidently with somebody else's.
+
+If your specification contains `/customers/{customerId}/orders`, the import above already declared
+the relation: that path *is* the sentence "orders belong to customers, keyed by `customerId`". You
+get the behaviour without writing anything.
+
+```bash
+curl -X POST localhost:8080/customers -d '{"name":"Ada"}'      # → Location: /customers/<a>
+curl -X POST localhost:8080/customers -d '{"name":"Grace"}'    # → Location: /customers/<g>
+
+curl -X POST localhost:8080/customers/<a>/orders -d '{"total":100}'
+curl -X POST localhost:8080/customers/<g>/orders -d '{"total":250}'
+
+curl localhost:8080/customers/<a>/orders     # → just the 100
+curl localhost:8080/customers/<g>/orders     # → just the 250
+```
+
+Three more things follow from the same declaration:
+
+- **An order cannot be created under a customer who does not exist.** `POST /customers/99/orders`
+  answers `404` — the route names something that is not there. A reference in the *body* that does
+  not resolve answers `422` instead: the request reached a real place and its payload is what is
+  wrong.
+- **An id does not travel between parents.** Reading one customer's order through another
+  customer's path is a `404`, not a lucky hit.
+- **Deleting a customer who still has orders is refused** with a `409` naming what is in the way.
+
+### Choosing what a delete does
+
+`restrict` is the default because that is what the APIs you are standing in for mostly do — deleting
+a customer at a payment provider does not delete their past charges. Change it when the API you are
+modelling really does cascade:
+
+```bash
+curl -X PUT localhost:8080/__admin/relations/orders \
+  -d '{"belongsTo":[{"collection":"customers","via":"customerId","onDelete":"cascade"}]}'
+```
+
+`orphan` is the third option: delete the parent, leave the children with a key that no longer
+resolves. Some real APIs do exactly that, so it is available rather than assumed to be a mistake.
+
+### Declaring one by hand
+
+For a sandbox you built without a specification, declare the relation yourself. `via` is the field in
+the child document that holds the parent's id:
+
+```bash
+curl -X PUT localhost:8080/__admin/relations/invoices \
+  -d '{"belongsTo":[{"collection":"customers","via":"billTo"}]}'
+```
+
+If your documents do not carry such a field at all, that is fine — nothing is added to them. The
+sandbox records the parent alongside the document instead, so what you stored is returned back to
+you byte for byte and stays exactly what your contract describes.
+
+### What it deliberately does not do
+
+Relations make the sandbox behave like the API it stands in for. They do not turn it into a database:
+there are no joins, no transactions across collections, no query language and no schema migrations.
+A mock that is harder to reason about than the service it replaces has stopped being useful.
+
+Two collections may reference each other, and a collection may reference itself (`managerId` on
+`employees` is a real model) — a relation is checked when its key is present, so there is never a
+chicken-and-egg problem creating the first document.
+
 ## Check that it still tells the truth
 
 A mock that has quietly drifted from the API it models is worse than no mock, because it manufactures
