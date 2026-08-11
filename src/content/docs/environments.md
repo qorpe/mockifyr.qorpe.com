@@ -130,6 +130,64 @@ curl -X PUT http://localhost:8080/__admin/environments/baseUrl/active \
 | `Environment.ReservedKey` | 400 |
 | `Environment.UnknownKey` | 404 |
 
+## Secret values
+
+A sandbox is where a webhook signing secret or a partner API token ends up, and a plain environment
+value shows up in the admin API, on the dashboard and inside export bundles — the artefacts that get
+attached to tickets and committed to repositories.
+
+Mark a value `secret` and its literal is withheld from all three, while stubs keep resolving it
+normally:
+
+```bash
+curl -X PUT localhost:8080/__admin/environments/signingKey \
+  -d '{"activeValue":"live","values":[
+        {"name":"live","value":"whsec_live_9c1f","secret":true},
+        {"name":"test","value":"whsec_test_0000"}
+      ]}'
+```
+
+Reading it back gives you the marker and no literal — including `resolved`, which would otherwise hand
+back the same value by another name:
+
+```json
+{ "key": "signingKey", "activeValue": "live", "resolved": null, "secret": true,
+  "values": [ { "name": "live", "secret": true },
+              { "name": "test", "value": "whsec_test_0000", "secret": false } ] }
+```
+
+A stub using `{{signingKey}}` serves `whsec_live_9c1f` exactly as before. Hiding a value you can no
+longer use would not be a feature.
+
+### Changing one
+
+Because reads withhold the literal, a write that carries the marker and no value means **unchanged**:
+
+```bash
+# renames a value, leaves the secret alone
+curl -X PUT localhost:8080/__admin/environments/signingKey \
+  -d '{"activeValue":"live","values":[{"name":"live","secret":true},{"name":"staging","value":"..."}]}'
+```
+
+Send an explicit `value` to rotate it. A value that is new, marked secret and carries no literal is
+**dropped** rather than stored empty — an empty secret is a stub that signs with nothing and reports
+success, which is worse than an error.
+
+The dashboard follows the same rule: the field for a secret is masked and reads *unchanged — type to
+replace*, so saving a key you did not edit leaves the secret exactly as it was.
+
+### In an export bundle
+
+Bundles carry the marker and never the literal. A restore therefore reports the value as present but
+unset rather than writing an empty string, and you re-enter it once on the target host.
+
+:::caution
+This keeps a secret out of the surfaces that report it. It is not encryption at rest — the value is
+stored as text like every other environment value, and anyone with filesystem or database access to
+the host can read it. Environments remain test-data-only: do not put production credentials in a
+sandbox.
+:::
+
 ## Export and import
 
 Exporting stubs from the dashboard carries the tenant's environments with them. With no keys defined
