@@ -138,6 +138,73 @@ Kubernetes updates a mounted Secret by swapping a symlink.
 A key file that is briefly unreadable or half-written leaves the last good keys in place, so a
 rotation script that truncates before writing cannot disarm a running host.
 
+## Reachable by people you do not employ
+
+Three settings a host on the open internet needs that a host on your laptop does not. All three are
+**off by default** — a host without them behaves exactly as it always has.
+
+### Which hosts it may call
+
+A mock server calls out for a living: proxy stubs forward, webhooks fire. On a shared network that is
+also a way *into* it. Name the hosts you actually integrate with and everything else is refused:
+
+```bash
+mockifyr --allow-outbound-host partner.example \
+         --allow-outbound-host '*.hooks.partner.example' \
+         --allow-outbound-host internal-qa.example:8443
+```
+
+An entry without a port allows any port on that host. `*.domain` covers **subdomains only** — add the
+bare domain as its own entry if you want it too, since allowing `*.internal.example` rarely means
+`internal.example` itself.
+
+The check runs against the URL a webhook actually resolves to, not the template it was written as, so
+a callback address that comes from the request (`{{request.headers.X-Callback}}`) is checked at the
+moment it is known. A refused webhook is recorded on the request that triggered it — look at the
+journal entry's detail, where a failed delivery would appear. A refused proxy answers **502** naming
+the host and what is allowed.
+
+:::note
+A `publish` action names a topic on the broker you started the host with, so there is no per-stub
+outbound host for an allowlist to decide. Restrict broker access with your broker's own controls.
+:::
+
+### How large a request body it will read
+
+Without this, the default is roughly 30 MB for everyone:
+
+```bash
+mockifyr --max-request-body-bytes 1048576 \
+         --tenant-max-request-body acme:262144
+```
+
+The host value is a **ceiling**: a per-tenant value above it is clamped, not honoured. Something
+larger is refused with **413**, and the message says which of the two limits it hit — so you know
+whether to raise the tenant's number or the host's.
+
+### Which browsers may call it
+
+A partner's browser application cannot call your sandbox until you say so. Name the origins:
+
+```bash
+mockifyr --allow-origin https://app.partner.example \
+         --tenant-allow-origin 'acme=https://acme-portal.example'
+```
+
+Origins are matched whole — scheme, host and port. A tenant that names its own origins uses **only**
+those; a tenant that names none inherits the host-wide list. The separator for a per-tenant entry is
+`=` rather than `:`, because every origin already contains a colon.
+
+This covers the mock and [`/__sandbox`](/sandbox/#what-a-partner-can-see-for-themselves), so a browser
+partner can read their own OTP. It deliberately does **not** cover `/__admin`, which stays same-origin:
+you reach the admin API from the dashboard that served it.
+
+:::caution
+An origin nobody allowed simply gets no CORS headers — the browser is what enforces the rule, so
+non-browser clients are unaffected. If a `fetch` fails with a CORS error, the origin is missing from
+this list; the request itself was answered.
+:::
+
 ## Backup and restore
 
 ```bash
