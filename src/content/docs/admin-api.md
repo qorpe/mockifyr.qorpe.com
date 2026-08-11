@@ -292,6 +292,41 @@ documents, `--resource-limit`; oldest evicted first).
 | `Resource.BodyTooLarge` | 413 |
 | `Resource.InvalidCollection` · `Resource.InvalidId` · `Resource.InvalidBody` | 422 |
 
+## Sandbox relations
+
+A collection can belong to another one: an order to a customer, an account to a client. Declaring
+that is what makes `/customers/1/orders` answer with *that* customer's orders instead of every
+order in the sandbox — see [the sandbox guide](/sandbox/#relations-between-collections).
+
+Importing an OpenAPI document declares these for you: `/customers/{customerId}/orders` already says
+"orders belong to customers, keyed by `customerId`". Declare them by hand only for a sandbox you
+built without a spec.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/__admin/relations` | List the tenant's declared relations |
+| `PUT` | `/__admin/relations/{collection}` | Declare or replace one collection's relations (replaces, never merges) |
+| `DELETE` | `/__admin/relations/{collection}` | Remove them — **404** when the collection declared none. Documents are untouched |
+
+```json
+PUT /__admin/relations/orders
+{
+  "belongsTo": [
+    { "collection": "customers", "via": "customerId", "onDelete": "restrict" }
+  ]
+}
+```
+
+`via` names the field in the child document that holds the parent's id. `onDelete` is `restrict`
+(the default), `cascade` or `orphan`; anything else is refused rather than defaulted, because
+reading a typo as `restrict` would give you the opposite of what you asked for in the one setting
+that decides whether data is destroyed. A collection may declare at most 16 relations.
+
+| Error code | HTTP |
+|------------|------|
+| `Relation.NotFound` | 404 |
+| `Relation.InvalidBody` · `Relation.InvalidCollection` · `Relation.InvalidField` · `Relation.TooMany` | 422 |
+
 ## Sandbox API keys
 
 With [`--sandbox-auth`](/cli/#sandbox) enabled, tenants can hand out per-consumer credentials for
