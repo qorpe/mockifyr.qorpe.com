@@ -278,7 +278,7 @@ documents, `--resource-limit`; oldest evicted first).
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/__admin/resources` | List the tenant's collections with document counts |
-| `GET` | `/__admin/resources/{collection}?limit=&offset=` | Page through a collection (`limit` 1..500, default 100) — returns `{documents, total}` |
+| `GET` | `/__admin/resources/{collection}?limit=&offset=` | Page through a collection (`limit` 1..500, default 100) — returns `{documents, total}`. Also filters, sorts and projects: `?status=settled&_sort=-total&_fields=id,total`, with `total` counting **matches**. See [filtering](/sandbox/#filtering-sorting-and-summary-shapes) |
 | `GET` | `/__admin/resources/{collection}/{id}` | Read one document |
 | `PUT` | `/__admin/resources/{collection}/{id}` | Create or replace a document (last-write-wins; the version advances) |
 | `DELETE` | `/__admin/resources/{collection}/{id}` | Delete one document — **404** when it does not exist |

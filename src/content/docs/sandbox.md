@@ -103,6 +103,49 @@ levels (a cyclic `$ref`) is refused instead of hanging.
 
 The dashboard's **Add stub → OpenAPI** channel does the same thing with a file picker.
 
+## Filtering, sorting and summary shapes
+
+Real APIs let you narrow a list. So does the sandbox — on the documents themselves, with no extra
+stub per query shape:
+
+```bash
+curl 'localhost:8080/orders?status=settled&_sort=-total&_fields=id,total'
+```
+
+| Form | Means |
+|---|---|
+| `?status=settled` | the field equals the value |
+| `?note:contains=urgent` | the field's text contains it |
+| `?ref:matches=^INV-\d+$` | the field matches a regular expression |
+| `?note:absent=true` | the field is not there at all (`false` — it is) |
+| `?_sort=total` · `?_sort=-total` | ascending · descending |
+| `?_fields=id,total` | return only these fields |
+
+Those first four are the same words a stub uses to match a request, deliberately: one vocabulary, not
+two. Several filters combine with AND. `limit`, `offset`, `_sort` and `_fields` are the list's own
+parameters, so a document field with one of those names cannot be filtered on.
+
+The same query works on `GET /__admin/resources/{collection}`, where `total` counts the documents that
+**matched** — not the ones in the collection — so paging over a filtered list is honest.
+
+:::caution
+For filtering to work on a served route, the stub must match with **`urlPath`**, not `url`. `url`
+matches the path *and* the query string, so a stub written as `"url": "/orders"` stops matching the
+moment somebody filters — the request that most wants this returns a 404.
+
+```json
+{ "request": { "method": "GET", "urlPath": "/orders" },
+  "response": { "body": "{{state.list}}", "state": { "operation": "list", "collection": "orders" } } }
+```
+:::
+
+A few deliberate details: numbers sort as numbers (`9` before `250`, not after), a document missing the
+sort field goes last whichever way you sorted, and a selected field the document does not have is
+simply absent from the result rather than present and null.
+
+There is no query language here — no joins, nothing across collections. Filter, sort, select. A mock
+that is harder to reason about than the service it replaces has stopped being useful.
+
 ## Relations between collections
 
 Real APIs are hierarchical. An order belongs to a customer, an account to a client, a transaction to
