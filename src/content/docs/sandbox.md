@@ -285,6 +285,43 @@ only accepts its own [admin authentication](/securing-the-admin-api/), on both c
 plane and data plane never blur.
 :::
 
+### What a partner can see for themselves
+
+Calling the mock is half of integrating against it. The other half is looking: *did the OTP arrive?
+what did that webhook actually contain? why did my call 404?* Without that, every question becomes a
+message to you.
+
+`/__sandbox/*` answers those, with the same key, for that key's tenant only:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/__sandbox/` | Which tenant this key belongs to |
+| `GET` | `/__sandbox/requests?unmatched=true` | Their request journal — the "why did it 404" surface |
+| `GET` | `/__sandbox/messages` | Captured e-mail, SMS and broker messages |
+| `GET` | `/__sandbox/messages/otp?recipient=…` | The one-time code from the newest matching message |
+| `GET` | `/__sandbox/resources` · `/{collection}` · `/{collection}/{id}` | Their sandbox data |
+| `GET` | `/__sandbox/environments` | Which value each key currently resolves to (never a [secret](#secret-values)) |
+| `POST` | `/__sandbox/resources/reset` · `/messages/reset` · `/requests/reset` | Start the next test run clean |
+
+```bash
+# the gesture this exists for
+curl -H 'X-Api-Key: mfk_…' 'http://localhost:8080/__sandbox/messages/otp?recipient=+15551234567'
+# → { "otp": "482915", "messageId": "…", "receivedAt": "…" }
+```
+
+Three things worth knowing:
+
+- **It is not `/__admin` with a smaller menu.** It is a separate surface, and the rule above still
+  holds without exception — a sandbox key authenticates nothing on the admin API.
+- **There is no tenant header here at all.** The tenant comes from the key. Sending
+  `X-Mockifyr-Tenant` naming somebody else is simply ignored, so there is nothing to get wrong.
+- **It exists only with `--sandbox-auth`.** Without keys there is no way to tell one partner from
+  another, so the whole namespace answers 404 rather than trusting everyone.
+
+Reads and resets only. Nothing here creates stubs, changes configuration, or reaches the network —
+for a credential that also needs to *write* configuration, see
+[`--partner-credential`](/securing-the-admin-api/#handing-a-credential-to-a-partner).
+
 ## In the dashboard
 
 The **Sandbox** group has two screens: **Resources** browses collections and documents and lets you
