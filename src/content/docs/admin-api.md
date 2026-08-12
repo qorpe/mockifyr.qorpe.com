@@ -292,6 +292,38 @@ documents, `--resource-limit`; oldest evicted first).
 | `Resource.BodyTooLarge` | 413 |
 | `Resource.InvalidCollection` · `Resource.InvalidId` · `Resource.InvalidBody` | 422 |
 
+## Sandbox datasets
+
+A named scenario across collections, loaded and reset as one thing — see
+[the sandbox guide](/sandbox/#datasets--a-whole-scenario-in-one-call).
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/__admin/datasets` | List the tenant's datasets |
+| `PUT` | `/__admin/datasets/{name}` | Declare or replace one. Declaring loads nothing |
+| `DELETE` | `/__admin/datasets/{name}` | Remove the definition. Documents an earlier load created are left alone |
+| `POST` | `/__admin/datasets/{name}/load` | Load it — returns `{loaded}`. Unloads a previous load of the same dataset first |
+| `POST` | `/__admin/datasets/{name}/unload` | Remove exactly what the last load created — returns `{removed}`. Not an error when nothing is loaded |
+
+```json
+PUT /__admin/datasets/delinquent
+{
+  "seed": 42,
+  "items": [
+    { "collection": "customers", "count": 1, "id": "customer-{{index}}",
+      "document": { "name": "{{random 'Name.fullName'}}" } }
+  ]
+}
+```
+
+`count` defaults to 1 and `id` to a generated one. `document` is JSON, not a string, and need not be
+valid JSON *before* rendering — it is checked afterwards. A dataset may create at most 10 000 documents.
+
+| Error code | HTTP |
+|------------|------|
+| `Dataset.NotFound` | 404 |
+| `Dataset.Invalid` · `Dataset.InvalidBody` · `Dataset.LoadFailed` | 422 |
+
 ## Sandbox relations
 
 A collection can belong to another one: an order to a customer, an account to a client. Declaring
