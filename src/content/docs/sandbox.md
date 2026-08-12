@@ -215,6 +215,75 @@ Two collections may reference each other, and a collection may reference itself 
 `employees` is a real model) — a relation is checked when its key is present, so there is never a
 chicken-and-egg problem creating the first document.
 
+## Datasets — a whole scenario in one call
+
+"The delinquent customer" is not a customer. It is a customer, three orders, two failed payments and a
+dunning record — across four collections and only meaningful together. Seeding them one collection at a
+time means a script, and then the scenario lives in the script rather than in the sandbox.
+
+Declare it once — the document templates contain single quotes, so this is a file rather than an
+inline `-d` string:
+
+```json title="delinquent.json"
+{
+  "seed": 42,
+  "items": [
+    { "collection": "customers", "count": 1, "id": "customer-{{index}}",
+      "document": { "name": "{{random 'Name.fullName'}}", "status": "delinquent" } },
+    { "collection": "orders", "count": 3, "id": "order-{{index}}",
+      "document": { "customerId": "customer-0", "total": 100 } }
+  ]
+}
+```
+
+```bash
+curl -X PUT localhost:8080/__admin/datasets/delinquent \
+  -H 'Content-Type: application/json' --data-binary @delinquent.json
+```
+
+Then load it, run your tests, and put the sandbox back:
+
+```bash
+curl -X POST localhost:8080/__admin/datasets/delinquent/load     # → { "loaded": 4 }
+curl -X POST localhost:8080/__admin/datasets/delinquent/unload   # → { "removed": 4 }
+```
+
+### What it does for you
+
+- **Order is worked out for you.** Write the items in any order; the loader puts parents before the
+  children that [belong to them](#relations-between-collections), because integrity would otherwise
+  refuse an order whose customer does not exist yet. Unloading reverses that, since a `restrict`
+  relation refuses to delete a customer who still has orders.
+- **All or nothing.** If anything fails — a template that will not render, a reference to a document
+  that is not there — every document the load already wrote is removed. A half-loaded scenario is one
+  nobody can reason about.
+- **Loading twice leaves one copy.** The previous load is removed first, so `load` before each test run
+  is a single line rather than a line and a guard.
+- **Unload only removes what that load created.** Documents you or a colleague added by hand stay.
+
+### Generating plausible data
+
+`count` and the [Faker helpers](/template-helpers/) turn "two hundred customers" into a line:
+
+```json
+{ "collection": "customers", "count": 200,
+  "document": { "name": "{{random 'Name.fullName'}}", "email": "{{random 'Internet.email'}}" } }
+```
+
+Templates also see `{{index}}` — the document's position, which is what makes `"id": "customer-{{index}}"`
+work — and `{{dataset}}`, the dataset's own name.
+
+**`seed` makes it reproducible.** The same dataset with the same seed produces the same two hundred
+customers on every load, which is what lets a dataset be the basis of a regression test rather than
+just a pile of data. Leave it out and each load generates fresh values. Seeding affects only that load —
+stubs serving random values elsewhere keep generating new ones.
+
+:::note
+A document template is written as **JSON**, not as an escaped string, and it does not have to be valid
+JSON before rendering: `{"total": {{random 'Number.digit'}}}` is fine, and is checked after the helpers
+have run. A dataset is capped at 10 000 documents in total.
+:::
+
 ## Check that it still tells the truth
 
 A mock that has quietly drifted from the API it models is worse than no mock, because it manufactures
