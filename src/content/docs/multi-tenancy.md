@@ -92,3 +92,54 @@ data, not a security boundary between users — see [securing the admin API](/se
 
 - [Environments](/environments/) — tenant-scoped configuration values.
 - [Admin API](/admin-api/) — the full endpoint reference.
+
+
+## Declaring a tenant
+
+A tenant exists the moment something is stored under its name — that is still true, and nothing about
+it has changed. What you can also do now is **declare** one, which makes it an object you can name,
+suspend, bound and offboard:
+
+```bash
+curl -X POST http://localhost:8080/__admin/tenants \
+  -H 'Content-Type: application/json' \
+  -d '{"id":"acme","displayName":"Acme Ltd","storageLimitBytes":10000000}'
+```
+
+Declaring is additive. A host that never calls this route behaves exactly as before, and the tenant
+listing still reports everything holding stubs.
+
+**Suspending** stops serving without deleting anything:
+
+```bash
+curl -X POST http://localhost:8080/__admin/tenants/acme/suspend
+```
+
+Requests for a suspended tenant get **403** with `Tenant.Suspended` — deliberately not the 401 an
+unknown key gets, because the credential is fine and the account is not, and telling a partner
+"unauthorised" sends them to re-check a key with nothing wrong with it. Their stubs, documents and
+keys are all still there; `/resume` puts it back exactly as it was.
+
+**Offboarding** removes everything scoped to the tenant and tells you what went:
+
+```bash
+curl -X DELETE http://localhost:8080/__admin/tenants/acme
+```
+
+```json
+{ "removed": { "stubs": 12, "documents": 340, "environmentKeys": 3, "apiKeys": 2, "messages": 18 } }
+```
+
+A receipt rather than an "ok": a destructive operation that only says it ran leaves you to go and
+check whether it did what you meant.
+
+## Bounding a tenant
+
+`--resource-max-body` caps one document and `--resource-limit` caps one collection, which leaves the
+case that matters on a shared host: one tenant seeding a loop across many collections.
+`--tenant-storage-limit <bytes>` is the ceiling on everything one tenant holds, and a declared tenant
+can carry its own instead.
+
+The refusal names both numbers — the limit and what is already used — and the tenant listing reports
+usage before it is reached. Editing an existing document only counts the difference, so a tenant at
+its ceiling can still correct what it has rather than being forced to delete first.
