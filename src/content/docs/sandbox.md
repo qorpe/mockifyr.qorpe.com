@@ -385,6 +385,19 @@ A key with a `quotaPerHour` is limited over a fixed hourly window. Counted respo
 instead of in production. `quotaPerHour: 0` (or absent) means unlimited, and unlimited keys emit no
 rate headers.
 
+`--rate-burst <n>/<seconds>` adds a second window beside that one, for the whole host. The two
+protect different things — fifty requests in a second is a runaway loop, fifty thousand in a day is a
+consumer who should be paying — and one number cannot say both. Because it protects the host rather
+than a partner's budget, it applies to keys with **no** `quotaPerHour` as well: "unlimited" describes
+a budget, not permission to melt the host. Both windows count every request, even one the other
+already refused, and the rate headers report whichever limit is about to stop the caller. When both
+refuse, `Retry-After` names the later reopening — a `Retry-After` that is too short just invites a
+retry into a door that is still shut.
+
+```bash
+mockifyr --sandbox-auth --rate-burst 50/10
+```
+
 Revoking is immediate:
 
 ```bash
@@ -458,8 +471,15 @@ are otherwise opaque: they round-trip byte for byte, unicode and all.
 **Tenancy.** Collections, documents and keys are all [tenant-scoped](/multi-tenancy/). The same
 collection name and the same document id in two tenants are two different documents.
 
-**Usage counters are in memory by design.** The credential persists across a restart; the hourly
-counter starts fresh. That is a deliberate trade — a quota is a fairness mechanism here, not billing.
+**Quotas across replicas.** With `--redis`, the request count lives in Redis: two replicas enforce
+the number on the key rather than that number each, and a restart mid-hour does not refund what was
+already spent. Without a shared backend the count is in memory and starts fresh on restart — fine for
+one host, and the reason a multi-replica deployment should point at Redis.
+
+**Keys across replicas need `--change-feed`.** Issuing and revoking are announced on the same feed
+that carries stubs, environment keys and sandbox documents. Without it, another replica will not see
+an issued key — or a **revoked** one — until it restarts, and the host says so at startup rather than
+leaving you to find it in the logs.
 
 ## Related
 
@@ -467,4 +487,4 @@ counter starts fresh. That is a deliberate trade — a quota is a fairness mecha
 - [Admin API](/admin-api/#sandbox-resources) — every route, parameter and error code.
 - [Multi-tenancy](/multi-tenancy/) — how a tenant is chosen when there is no key.
 - [Persistence](/persistence/) — what survives a restart, and where it is stored.
-- [CLI](/cli/) — `--sandbox-auth`, `--resource-limit`, `--resource-max-body`.
+- [CLI](/cli/) — `--sandbox-auth`, `--rate-burst`, `--resource-limit`, `--resource-max-body`.
