@@ -31,7 +31,7 @@ Authentication — HTTP Basic, off by default — is covered in
 | `GET` | `/__admin/health` | Liveness and a snapshot of the instance | `{name, version, persistence, tenants, totalStubs, cryptography, audit}` |
 | `GET` | `/__admin/live` | Is the process alive (never fails while running) | `{status:"alive"}` |
 | `GET` | `/__admin/ready` | Should traffic be routed here | `{status}` — **503** while starting or draining |
-| `GET` | `/__admin/tenants` | Tenants currently holding stubs | `{tenants:[…]}` |
+| `GET` | `/__admin/tenants` | Tenants currently holding stubs, plus any that were declared — with status, storage limit and current usage | `{tenants:[…], declared:[…]}` |
 
 ```json
 {
@@ -375,6 +375,9 @@ display prefix is stored and listed — Mockifyr keeps a salted hash, never the 
 |--------|------|---------|
 | `GET` | `/__admin/apikeys` | List the tenant's keys — `id`, `name`, `prefix`, `createdAt`, `quotaPerHour`, `usedThisHour`, `expiresAt`, `scope`, `status`, `revokedAt`, `revokedBy`, `revokedReason` |
 | `POST` | `/__admin/apikeys` | Issue a key: `{"name": "ci", "quotaPerHour": 1000, "expiresInDays": 90, "scope": "read"}` (all but `name` optional; `expiresAt` accepts an absolute ISO instant instead) → **201** with the one-time `key` |
+| `POST` | `/__admin/tenants` | Declare a tenant: `{"id": "acme", "displayName": "Acme Ltd", "storageLimitBytes": 10000000}` (the last two optional) → **201** |
+| `POST` | `/__admin/tenants/{id}/suspend` · `/resume` | Stop or restart serving for a declared tenant. Nothing is deleted either way |
+| `DELETE` | `/__admin/tenants/{id}` | Offboard: removes the tenant's stubs, documents, environment keys, API keys and inbox, and answers with counts of each |
 | `GET` | `/__admin/usage` | Per-key counts over `?hours=` (default 24, capped at 24): `total`, `matched`, `unmatched`, `unauthorized`, `rateLimited`, `forbidden`, `topPaths`, `topUnmatchedPaths`. Empty unless the host runs with `--usage` |
 | `POST` | `/__admin/apikeys/{id}/rotate` | Issue a successor and lapse this key after `?overlapMinutes=` (default 60, max 43200; **0** revokes it at once) → **201** with the one-time `key` |
 | `DELETE` | `/__admin/apikeys/{id}` | Revoke, with an optional `?reason=`. The key stops authenticating immediately and stays listed, recording who revoked it and when |
