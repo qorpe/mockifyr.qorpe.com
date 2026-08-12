@@ -398,6 +398,37 @@ retry into a door that is still shut.
 mockifyr --sandbox-auth --rate-burst 50/10
 ```
 
+### What a consumer is doing
+
+Run the host with `--usage` and every request made with a key is counted:
+
+```bash
+curl http://localhost:8080/__admin/usage
+```
+
+```json
+{ "keys": [ { "name": "acme-integration", "total": 7, "matched": 3, "unmatched": 2,
+  "rateLimited": 2, "unauthorized": 0, "forbidden": 0,
+  "topUnmatchedPaths": [ { "path": "/customers/42/invoices", "count": 1 } ] } ] }
+```
+
+The refusals are counted apart on purpose — a wrong credential, a spent quota and a scope refusal
+send you to three different places. And **`topUnmatchedPaths` is the one to read**: a path the partner
+keeps calling that nothing models is the integration going wrong, in their words rather than yours.
+
+A partner can read their own, with the key they already hold and no admin credential:
+
+```bash
+curl -H 'X-Api-Key: mfk_…' http://localhost:8080/__sandbox/usage
+```
+
+This is **counts, not a journal**: a path, an outcome and a number, with no headers and no bodies, so
+the [journal masking](/observability/) that keeps secrets out of storage cannot be walked around by
+reading usage instead. It is bounded in three directions — a day of hourly buckets per key, a fixed
+number of distinct paths per bucket, and a cap on how many keys are tracked — and the path table is an
+approximate heavy-hitters counter: it is accurate about which paths dominate, not about the exact
+count of a rare one. It is also for operations, not invoices: nothing here survives a restart.
+
 ### The life of a key
 
 A key can carry an **expiry** — `expiresInDays: 90` when you are stating a policy, or an absolute
