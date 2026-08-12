@@ -398,6 +398,40 @@ retry into a door that is still shut.
 mockifyr --sandbox-auth --rate-burst 50/10
 ```
 
+### Retries that do not double-charge
+
+Every payment API a partner integrates against accepts an `Idempotency-Key` on writes, and their
+client library sends one and retries on timeouts. Run the host with `--idempotency` and the sandbox
+behaves the same way:
+
+```bash
+mockifyr --idempotency
+```
+
+- The **same key with the same request** replays the first response, and carries
+  `Idempotency-Replayed: true` so the client can tell without diffing bodies.
+- The **same key with a different request** is refused with **409** `Idempotency.KeyReused` — answering
+  it would hand the caller somebody else's payment.
+- **Safe methods are untouched.** A `GET` carrying the header is served normally.
+
+What counts as "the same request" is the method, path, query and body — deliberately not the headers,
+because a client retrying with a fresh trace id or a refreshed token is making the same request.
+
+Stored responses last 24 hours by default (`--idempotency-window`), and a 5xx is never remembered: a
+transient failure should not become permanent for the one key the client is retrying with.
+
+A tenant that is *deliberately* testing double submission can keep it off:
+
+```bash
+curl -X POST http://localhost:8080/__admin/tenants \
+  -H 'Content-Type: application/json' \
+  -d '{"id":"double-submit","displayName":"Double submit","idempotency":false}'
+```
+
+Both requests appear in the [request journal](/verification/), and the replayed one is marked
+`replayed: true` — it really did arrive, and saying so is what stops verification claiming the sandbox
+did the work twice.
+
 ### What a consumer is doing
 
 Run the host with `--usage` and every request made with a key is counted:
