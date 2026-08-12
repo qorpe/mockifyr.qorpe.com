@@ -385,11 +385,41 @@ A key with a `quotaPerHour` is limited over a fixed hourly window. Counted respo
 instead of in production. `quotaPerHour: 0` (or absent) means unlimited, and unlimited keys emit no
 rate headers.
 
-Revoking is immediate:
+### The life of a key
+
+A key can carry an **expiry** — `expiresInDays: 90` when you are stating a policy, or an absolute
+`expiresAt` when you are matching a date somebody else set. Past it the key stops working and the
+refusal says **expired** rather than a bare unauthorised, because those two send an integrator to
+completely different places: one re-reads their configuration, the other asks you for a new
+credential. A token that was never a key still learns nothing at all.
+
+A key can also be **read-only** (`scope: "read"`). Safe methods pass; anything else is refused with
+**403** — the credential is fine, the operation is not. The rule is the HTTP method, not the effect:
+a stub whose `GET` changes sandbox state through the [`state` directive](/responses/#stateful-responses-the-state-directive)
+is not stopped by it.
+
+**Rotating** issues a successor and lets the old key lapse, instead of stopping it the instant the new
+one starts:
 
 ```bash
-curl -X DELETE http://localhost:8080/__admin/apikeys/{id}
+curl -X POST 'http://localhost:8080/__admin/apikeys/{id}/rotate?overlapMinutes=60'
 ```
+
+For an hour both keys work, so the partner can deploy the new one and only then let the old one go — a
+rotation that causes an outage is a rotation nobody performs. The successor inherits the quota, scope
+and expiry: rotating changes the secret and nothing else you told the partner about their access.
+`overlapMinutes=0` ends the old key immediately, which is the right answer when the credential has
+already leaked.
+
+**Revoking** is immediate, and is a state rather than a delete:
+
+```bash
+curl -X DELETE 'http://localhost:8080/__admin/apikeys/{id}?reason=pilot%20ended'
+```
+
+The key stays in the listing marked `revoked`, carrying who ended it and why. Deleting the row would
+erase the only record that the decision was ever made — and "when did we turn this off, and who
+decided?" is the first question after an incident.
 
 :::caution
 A sandbox key is a **data-plane** credential. It never authenticates `/__admin/*` — the admin surface

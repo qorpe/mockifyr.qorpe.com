@@ -373,9 +373,10 @@ display prefix is stored and listed — Mockifyr keeps a salted hash, never the 
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `GET` | `/__admin/apikeys` | List the tenant's keys — `id`, `name`, `prefix`, `createdAt`, `quotaPerHour`, `usedThisHour` |
-| `POST` | `/__admin/apikeys` | Issue a key: `{"name": "ci", "quotaPerHour": 1000}` (`quotaPerHour` optional) → **201** with the one-time `key` |
-| `DELETE` | `/__admin/apikeys/{id}` | Revoke — the key stops authenticating immediately |
+| `GET` | `/__admin/apikeys` | List the tenant's keys — `id`, `name`, `prefix`, `createdAt`, `quotaPerHour`, `usedThisHour`, `expiresAt`, `scope`, `status`, `revokedAt`, `revokedBy`, `revokedReason` |
+| `POST` | `/__admin/apikeys` | Issue a key: `{"name": "ci", "quotaPerHour": 1000, "expiresInDays": 90, "scope": "read"}` (all but `name` optional; `expiresAt` accepts an absolute ISO instant instead) → **201** with the one-time `key` |
+| `POST` | `/__admin/apikeys/{id}/rotate` | Issue a successor and lapse this key after `?overlapMinutes=` (default 60, max 43200; **0** revokes it at once) → **201** with the one-time `key` |
+| `DELETE` | `/__admin/apikeys/{id}` | Revoke, with an optional `?reason=`. The key stops authenticating immediately and stays listed, recording who revoked it and when |
 
 A key with a `quotaPerHour` is rate limited over a fixed hourly window: counted responses carry
 `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (Unix seconds), and the
