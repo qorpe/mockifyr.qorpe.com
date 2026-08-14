@@ -112,6 +112,7 @@ Covered end to end in [deploying in production](/deploying-in-production/).
 | `--tenant-storage-limit <bytes>` | unlimited | Ceiling on the sandbox document bytes one tenant may hold. A declared tenant can carry its own instead. The refusal names the limit and the current usage. |
 | `--idempotency` | off | Replay the first response when a write is retried with the same `Idempotency-Key`, instead of running it again. A declared tenant can keep it off while the host has it on. |
 | `--idempotency-window <seconds>` | `86400` | How long a stored response stays replayable. |
+| `--env <key>=<value>` | none | A host-level environment value every tenant inherits unless it defines the same key. Repeatable. Declared as constants — a value set here has one form and no runtime switch. |
 | `--usage` | off | Keep bounded per-key request counts — total, matched, unmatched, and each refusal separately — plus the most-called paths, readable at `/__admin/usage` and by a partner at `/__sandbox/usage`. Counts only: no headers, no bodies, nothing per request. |
 | `--rate-burst <n>/<seconds>` | off | A host-wide burst ceiling counted beside each key's hourly quota — e.g. `--rate-burst 50/10` for fifty requests per ten seconds. It applies to keys with **no** quota too, and whichever limit is about to stop the caller is the one reported in the rate headers. |
 
