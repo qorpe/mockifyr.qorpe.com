@@ -240,3 +240,50 @@ active, and lets you switch the active value.
 - [Multi-tenancy](/multi-tenancy/) — the scope environments live in.
 - [Persistence](/persistence/) — where environment values are stored.
 - [Templating](/templating/) — what runs after resolution.
+
+
+## Values that reference values
+
+A value may reference another key, so a host name is written once:
+
+```
+apiBase     = https://sandbox.acme.com
+paymentsUrl = {{apiBase}}/v2/payments
+webhookUrl  = {{apiBase}}/hooks
+```
+
+Changing `apiBase` changes both, with nothing re-saved.
+
+**A loop is refused when you save it**, not when a request arrives — the error names the chain
+(`a → b → a`) so you can see which two values disagree. Two values referencing the same third one is
+not a loop; that is the ordinary case this exists for.
+
+**A secret stays secret through composition.** If `authHeader` is `Bearer {{apiToken}}` and `apiToken`
+is a secret, `authHeader` is withheld from the admin API and the dashboard too — otherwise composing a
+value would be a way to read around [secret values](/environments/#secret-values).
+
+## Constants
+
+A key can be marked a constant: one value, no switch. It is the difference between *this is fixed* and
+*this happens to have one option so far*, which a key with a single value could not express. Saving a
+constant with more than one value is refused.
+
+```bash
+curl -X PUT http://localhost:8080/__admin/environments/region \
+  -H 'Content-Type: application/json' \
+  -d '{"activeValue":"eu","constant":true,"values":[{"name":"eu","value":"eu-west"}]}'
+```
+
+## Values shared by every tenant
+
+The sandbox's own base URL, a shared test IBAN, a certificate thumbprint — values that are not really
+per tenant. Declare them once on the host:
+
+```bash
+mockifyr --env apiBase=https://sandbox.example --env testIban=DE89370400440532013000
+```
+
+Every tenant sees them, and **any tenant can override one** by defining the same key — a shared value
+you could not override would be a constraint rather than a convenience. The tenant listing marks each
+key as inherited or the tenant's own, and the dashboard shows that on the row, so "why is this
+different here" does not require reading two screens.
