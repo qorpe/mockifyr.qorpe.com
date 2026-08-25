@@ -120,10 +120,11 @@ curl 'localhost:8080/orders?status=settled&_sort=-total&_fields=id,total'
 | `?note:absent=true` | the field is not there at all (`false` — it is) |
 | `?_sort=total` · `?_sort=-total` | ascending · descending |
 | `?_fields=id,total` | return only these fields |
+| `?_expand=customer` | [embed the related document](#reading-a-document-with-its-parent) |
 
 Those first four are the same words a stub uses to match a request, deliberately: one vocabulary, not
-two. Several filters combine with AND. `limit`, `offset`, `_sort` and `_fields` are the list's own
-parameters, so a document field with one of those names cannot be filtered on.
+two. Several filters combine with AND. `limit`, `offset`, `_sort`, `_fields` and `_expand` are the
+list's own parameters, so a document field with one of those names cannot be filtered on.
 
 The same query works on `GET /__admin/resources/{collection}`, where `total` counts the documents that
 **matched** — not the ones in the collection — so paging over a filtered list is honest.
@@ -205,7 +206,51 @@ If your documents do not carry such a field at all, that is fine — nothing is 
 sandbox records the parent alongside the document instead, so what you stored is returned back to
 you byte for byte and stays exactly what your contract describes.
 
+### Reading a document with its parent
+
+An order knows which customer it belongs to. Without asking, reading the order gives you the id and
+you make a second call:
+
+```bash
+curl 'localhost:8080/orders/ord-7?_expand=customer'
+```
+
+```json
+{
+  "total": 100,
+  "customerId": "cus-1",
+  "_expand": { "customer": { "id": "cus-1", "name": "Ada Lovelace" } }
+}
+```
+
+The embedded document goes under `_expand` rather than into a `customer` field beside your own, so it
+can never be mistaken for — or quietly overwrite — a field your contract actually declares. Your
+document comes back exactly as you stored it, with one extra key that is visibly ours.
+
+Name the relation by the field without its id suffix (`customerId` → `customer`, `customer_id` →
+`customer`), or by the field itself (`?_expand=customerId`); both embed under the same name. Ask for
+several with a comma: `?_expand=customer,warehouse`.
+
+It works the same way on a list, on `GET /__admin/resources/{collection}/{id}` and on the partner
+surface `GET /__sandbox/resources/{collection}/{id}`:
+
+```bash
+curl 'localhost:8080/orders?status=settled&_expand=customer'
+```
+
+Two rules worth knowing:
+
+- **A parent that is not there embeds `null`.** Whether the key was never set or points at a document
+  since deleted, you asked for *this* document and you get it — the read does not fail because
+  something beside it is missing.
+- **A name that matches no declared relation is a `400`**, and the message lists the ones that would
+  have worked. Returning your document quietly unexpanded would look exactly like a typo.
+
 ### What it deliberately does not do
+
+Expanding goes **one level, upward, to a relation you declared**. `?_expand=customer.address` is not
+supported — it names no relation, so it is refused like any other unknown name — and there is no form
+that embeds a document's children.
 
 Relations make the sandbox behave like the API it stands in for. They do not turn it into a database:
 there are no joins, no transactions across collections, no query language and no schema migrations.
@@ -519,7 +564,7 @@ message to you.
 | `GET` | `/__sandbox/requests?unmatched=true` | Their request journal — the "why did it 404" surface |
 | `GET` | `/__sandbox/messages` | Captured e-mail, SMS and broker messages |
 | `GET` | `/__sandbox/messages/otp?recipient=…` | The one-time code from the newest matching message |
-| `GET` | `/__sandbox/resources` · `/{collection}` · `/{collection}/{id}` | Their sandbox data |
+| `GET` | `/__sandbox/resources` · `/{collection}` · `/{collection}/{id}` | Their sandbox data — the item read takes `?_expand=` like the admin one |
 | `GET` | `/__sandbox/environments` | Which value each key currently resolves to (never a [secret](#secret-values)) |
 | `POST` | `/__sandbox/resources/reset` · `/messages/reset` · `/requests/reset` | Start the next test run clean |
 

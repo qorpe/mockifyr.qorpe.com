@@ -279,7 +279,7 @@ documents, `--resource-limit`; oldest evicted first).
 |--------|------|---------|
 | `GET` | `/__admin/resources` | List the tenant's collections with document counts |
 | `GET` | `/__admin/resources/{collection}?limit=&offset=` | Page through a collection (`limit` 1..500, default 100) — returns `{documents, total}`. Also filters, sorts and projects: `?status=settled&_sort=-total&_fields=id,total`, with `total` counting **matches**. See [filtering](/sandbox/#filtering-sorting-and-summary-shapes) |
-| `GET` | `/__admin/resources/{collection}/{id}` | Read one document |
+| `GET` | `/__admin/resources/{collection}/{id}?_expand=` | Read one document. `?_expand=customer` embeds the [declared parent](/sandbox/#reading-a-document-with-its-parent) under `_expand`; an unknown relation name is a **400** naming the ones that exist |
 | `PUT` | `/__admin/resources/{collection}/{id}` | Create or replace a document (last-write-wins; the version advances) |
 | `DELETE` | `/__admin/resources/{collection}/{id}` | Delete one document — **404** when it does not exist |
 | `POST` | `/__admin/resources/{collection}/reset` | Clear one collection |
